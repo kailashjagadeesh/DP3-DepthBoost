@@ -3,7 +3,7 @@
 # Define an array of GPU IDs to exclude
 exclude_gpus=(6 7) # Add the GPU IDs you want to exclude
 # exclude_gpus=()
-
+conda activate kj_dp3
 # Function to check if an array contains a value
 containsElement () {
   for e in "${@:2}"; do

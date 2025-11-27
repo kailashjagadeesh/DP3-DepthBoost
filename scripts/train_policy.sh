@@ -35,7 +35,7 @@ else
 fi
 
 cd 3D-Diffusion-Policy
-
+conda activate kj_dp3
 
 export HYDRA_FULL_ERROR=1 
 export CUDA_VISIBLE_DEVICES=${gpu_id}

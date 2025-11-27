@@ -5,7 +5,7 @@
 
 
 cd third_party/dexart-release
-
+conda activate kj_dp3
 task_name=${1}
 num_episodes=100
 root_dir=../../3D-Diffusion-Policy/data/

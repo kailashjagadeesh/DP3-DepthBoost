@@ -3,7 +3,7 @@
 
 
 cd third_party/Metaworld
-
+conda activate kj_dp3
 task_name=${1}
 
 export CUDA_VISIBLE_DEVICES=0

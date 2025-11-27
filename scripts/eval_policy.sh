@@ -18,7 +18,7 @@ gpu_id=${5}
 
 
 cd 3D-Diffusion-Policy
-
+conda activate kj_dp3
 export HYDRA_FULL_ERROR=1
 export CUDA_VISIBLE_DEVICES=${gpu_id}
 python eval.py --config-name=${config_name}.yaml \

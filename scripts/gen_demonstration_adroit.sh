@@ -3,7 +3,7 @@
 # bash scripts/gen_demonstration_adroit.sh pen
 
 cd third_party/VRL3/src
-
+conda activate kj_dp3
 task=${1}
 
 CUDA_VISIBLE_DEVICES=0 python gen_demonstration_expert.py --env_name $task \
