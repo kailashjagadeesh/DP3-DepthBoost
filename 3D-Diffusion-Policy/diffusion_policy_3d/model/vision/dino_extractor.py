@@ -36,7 +36,11 @@ class DinoV3Encoder(nn.Module):
             raise e
 
         # Determine embedding dimension (e.g., 1024 for ViT-L)
-        self.visual_feature_dim = self.backbone.embed_dim
+        if hasattr(self.backbone, 'embed_dim'):
+            self.visual_feature_dim = self.backbone.embed_dim
+        else:
+            DIMS = {'dinov3_vits16': 384, 'dinov3_vitb16': 768, 'dinov3_vitl16': 1024}
+            self.visual_feature_dim = DIMS.get(dino_model_name, 1024)
         
         if freeze_backbone:
             for param in self.backbone.parameters():
