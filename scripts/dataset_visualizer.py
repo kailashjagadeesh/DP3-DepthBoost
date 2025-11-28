@@ -2,6 +2,37 @@
 """
 Script to visualize RGB images, depth maps, and point clouds from zarr files.
 """
+'''
+# Interactive mode with RGB, depth, and point cloud
+python scripts/dataset_visualizer.py 3D-Diffusion-Policy/data/metaworld_basketball_expert.zarr --mode interactive
+
+# View a single sample with all three (RGB, depth, point cloud)
+python scripts/dataset_visualizer.py 3D-Diffusion-Policy/data/metaworld_basketball_expert.zarr --mode single --idx 5
+
+# View only point cloud (interactive plotly)
+python scripts/dataset_visualizer.py 3D-Diffusion-Policy/data/metaworld_basketball_expert.zarr --mode pointcloud --idx 0 --use-plotly
+
+# View only point cloud (matplotlib)
+python scripts/dataset_visualizer.py 3D-Diffusion-Policy/data/metaworld_basketball_expert.zarr --mode pointcloud --idx 0
+
+# Batch view with point clouds
+python scripts/dataset_visualizer.py 3D-Diffusion-Policy/data/metaworld_basketball_expert.zarr --mode batch --num-samples 5
+
+# Skip point clouds if you only want RGB and depth
+python scripts/dataset_visualizer.py 3D-Diffusion-Policy/data/metaworld_basketball_expert.zarr --no-pointcloud
+
+# Save all RGB and depth images
+python scripts/dataset_visualizer.py 3D-Diffusion-Policy/data/metaworld_basketball_expert.zarr --save-individual
+
+# Save specific range of images
+python scripts/dataset_visualizer.py 3D-Diffusion-Policy/data/metaworld_basketball_expert.zarr --save-individual --idx 0 --end-idx 100 --output-dir ./my_images
+
+# Save with custom output directory
+python scripts/dataset_visualizer.py 3D-Diffusion-Policy/data/metaworld_basketball_expert.zarr --save-individual --output-dir ./dataset_images
+
+# Save depth as raw float values (.npy files)
+python scripts/dataset_visualizer.py 3D-Diffusion-Policy/data/metaworld_basketball_expert.zarr --save-individual --save-depth-as-float
+'''
 
 import os
 import argparse
@@ -17,6 +48,13 @@ try:
 except ImportError:
     PLOTLY_AVAILABLE = False
     print("Warning: plotly not available. Using matplotlib for 3D visualization.")
+
+try:
+    from PIL import Image
+    PIL_AVAILABLE = True
+except ImportError:
+    PIL_AVAILABLE = False
+    print("Warning: PIL/Pillow not available. Install it for saving individual images.")
 
 
 def load_zarr_data(zarr_path, load_pointcloud=True):
@@ -395,6 +433,85 @@ def interactive_visualizer(img_array, depth_array, num_samples, start_idx=0, poi
     plt.show()
 
 
+def save_individual_images(img_array, depth_array, num_samples, 
+                          start_idx=0, end_idx=None, output_dir='./saved_images',
+                          save_depth_as_float=False):
+    """Save RGB and depth images individually with sample IDs.
+    
+    Args:
+        img_array: Array of RGB images
+        depth_array: Array of depth maps
+        num_samples: Total number of samples
+        start_idx: Starting index
+        end_idx: Ending index (None for all)
+        output_dir: Output directory
+        save_depth_as_float: If True, save depth as .npy files (raw values), 
+                            else save as normalized PNG
+    """
+    if not PIL_AVAILABLE:
+        raise ImportError("PIL/Pillow is required. Install with: pip install Pillow")
+    
+    if end_idx is None:
+        end_idx = num_samples
+    
+    end_idx = min(end_idx, num_samples)
+    
+    # Create output directories
+    os.makedirs(output_dir, exist_ok=True)
+    rgb_dir = os.path.join(output_dir, 'rgb')
+    depth_dir = os.path.join(output_dir, 'depth')
+    os.makedirs(rgb_dir, exist_ok=True)
+    os.makedirs(depth_dir, exist_ok=True)
+    
+    print(f"Saving images from index {start_idx} to {end_idx-1}...")
+    print(f"Output directory: {output_dir}")
+    
+    for idx in range(start_idx, end_idx):
+        # Get the sample
+        img = img_array[idx]
+        depth = depth_array[idx]
+        
+        # Ensure image is in correct format (H, W, C) and uint8
+        if img.dtype != np.uint8:
+            if img.max() <= 1.0:
+                img = (img * 255).astype(np.uint8)
+            else:
+                img = img.astype(np.uint8)
+        
+        # Ensure depth is 2D
+        if len(depth.shape) > 2:
+            depth = depth.squeeze()
+        
+        # Save RGB image
+        rgb_path = os.path.join(rgb_dir, f'rgb_{idx:06d}.png')
+        Image.fromarray(img).save(rgb_path)
+        
+        # Save depth image
+        if save_depth_as_float:
+            # Save as numpy array (raw depth values)
+            depth_path = os.path.join(depth_dir, f'depth_{idx:06d}.npy')
+            np.save(depth_path, depth)
+        else:
+            # Normalize depth to 0-255 for visualization
+            depth_min, depth_max = depth.min(), depth.max()
+            if depth_max > depth_min:
+                depth_normalized = ((depth - depth_min) / (depth_max - depth_min) * 255).astype(np.uint8)
+            else:
+                depth_normalized = np.zeros_like(depth, dtype=np.uint8)
+            
+            depth_path = os.path.join(depth_dir, f'depth_{idx:06d}.png')
+            if len(depth_normalized.shape) == 2:
+                Image.fromarray(depth_normalized, mode='L').save(depth_path)
+            else:
+                Image.fromarray(depth_normalized).save(depth_path)
+        
+        if (idx - start_idx + 1) % 100 == 0:
+            print(f"  Saved {idx - start_idx + 1}/{end_idx - start_idx} images...")
+    
+    print(f"\n✓ Saved {end_idx - start_idx} RGB images to {rgb_dir}")
+    print(f"✓ Saved {end_idx - start_idx} depth images to {depth_dir}")
+
+
 def batch_visualize(img_array, depth_array, num_samples, num_samples_to_show=10, 
                     start_idx=0, save_path=None, pointcloud_array=None):
     """Visualize multiple samples in a grid."""
@@ -487,6 +604,14 @@ def main():
                        help='Skip loading point clouds even if available')
     parser.add_argument('--use-plotly', action='store_true',
                        help='Use plotly for interactive 3D point cloud visualization (requires plotly)')
+    parser.add_argument('--save-individual', action='store_true',
+                       help='Save RGB and depth images individually to files')
+    parser.add_argument('--output-dir', type=str, default='./saved_images',
+                       help='Output directory for saving individual images (default: ./saved_images)')
+    parser.add_argument('--end-idx', type=int, default=None,
+                       help='End index for saving individual images (default: all samples)')
+    parser.add_argument('--save-depth-as-float', action='store_true',
+                       help='Save depth as .npy files (raw float values) instead of normalized PNG')
     
     args = parser.parse_args()
     
@@ -505,6 +630,15 @@ def main():
     if args.idx >= num_samples:
         print(f"Warning: Index {args.idx} is out of range. Using index 0 instead.")
         args.idx = 0
+    
+    # Save individual images if requested
+    if args.save_individual:
+        save_individual_images(img_array, depth_array, num_samples,
+                              start_idx=args.idx, 
+                              end_idx=args.end_idx,
+                              output_dir=args.output_dir,
+                              save_depth_as_float=args.save_depth_as_float)
+        return  # Exit after saving
     
     # Visualize based on mode
     if args.mode == 'pointcloud':

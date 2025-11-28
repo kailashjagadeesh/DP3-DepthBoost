@@ -41,7 +41,7 @@ def main(args):
 			return
 	os.makedirs(save_dir, exist_ok=True)
 
-	e = MetaWorldEnv(env_name, device="cuda:0", use_point_crop=True)
+	e = MetaWorldEnv(env_name, device="cuda:0", use_point_crop=True, num_points=args.num_points, image_size=args.image_size)
 	
 	num_episodes = args.num_episodes
 	cprint(f"Number of episodes : {num_episodes}", "yellow")
@@ -188,6 +188,7 @@ if __name__ == "__main__":
 	parser.add_argument('--env_name', type=str, default='basketball')
 	parser.add_argument('--num_episodes', type=int, default=10)
 	parser.add_argument('--root_dir', type=str, default="../../3D-Diffusion-Policy/data/" )
-
+	parser.add_argument('--num_points', type=int, default=512)
+	parser.add_argument('--image_size', type=int, default=128)
 	args = parser.parse_args()
 	main(args)

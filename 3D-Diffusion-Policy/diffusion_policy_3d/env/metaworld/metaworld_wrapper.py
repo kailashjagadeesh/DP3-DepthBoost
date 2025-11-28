@@ -23,6 +23,7 @@ class MetaWorldEnv(gym.Env):
     def __init__(self, task_name, device="cuda:0", 
                  use_point_crop=True,
                  num_points=1024,
+                 image_size=128,
                  ):
         super(MetaWorldEnv, self).__init__()
 
@@ -42,11 +43,13 @@ class MetaWorldEnv(gym.Env):
         
         self.device_id = int(device.split(":")[-1])
         
-        self.image_size = 128
+        self.image_size = image_size
         
         self.pc_generator = PointCloudGenerator(sim=self.env.sim, cam_names=['corner2'], img_size=self.image_size)
         self.use_point_crop = use_point_crop
         cprint("[MetaWorldEnv] use_point_crop: {}".format(self.use_point_crop), "cyan")
+        cprint(f"[MetaWorldEnv] image_size: {self.image_size}", "cyan")  # ADD: logging
+        cprint(f"[MetaWorldEnv] num_points: {num_points}", "cyan")       # ADD: logging
         self.num_points = num_points # 512
         
         x_angle = 61.4
