@@ -109,6 +109,40 @@ def depth_to_pointcloud(depth, intrinsics, rgb_image=None):
     return point_cloud
 
 
+def align_depth_per_frame(predicted_depth, gt_depth):
+    """
+    Align predicted depth to ground truth using least squares scale and shift.
+    
+    aligned_depth = scale * predicted_depth + shift
+    
+    Args:
+        predicted_depth: (H, W) predicted depth map
+        gt_depth: (H, W) ground truth depth map
+    
+    Returns:
+        aligned_depth: (H, W) aligned depth map
+        scale, shift: alignment parameters
+    """
+    # Create valid mask (positive depths)
+    mask = (gt_depth > 0) & (predicted_depth > 0)
+    
+    if mask.sum() < 10:
+        # Not enough valid pixels, return original
+        return predicted_depth, 1.0, 0.0
+    
+    pred_valid = predicted_depth[mask].flatten()
+    gt_valid = gt_depth[mask].flatten()
+    
+    # Solve least squares: gt = scale * pred + shift
+    A = np.stack([pred_valid, np.ones_like(pred_valid)], axis=1)
+    result, _, _, _ = np.linalg.lstsq(A, gt_valid, rcond=None)
+    scale, shift = result
+    
+    aligned_depth = scale * predicted_depth + shift
+    
+    return aligned_depth, scale, shift
+
+
 def process_zarr_file(zarr_path, device='cuda', batch_size=10, num_points=4096):
     """
     Process zarr file: read images and intrinsics, generate depth maps, create point clouds.
@@ -208,10 +242,16 @@ def process_zarr_file(zarr_path, device='cuda', batch_size=10, num_points=4096):
                     # No need to adjust intrinsics since we're using the stored MuJoCo intrinsics
                     # which are already for the 512x512 resolution
                 
-                # Store resized depth
+                # Per-frame alignment: align predicted depth to ground truth
+                gt_depth = data_group['depth'][idx]
+                depth, scale, shift = align_depth_per_frame(depth, gt_depth)
+                if batch_start == 0 and i == 0:
+                    cprint(f'Sample alignment (frame {idx}): scale={scale:.4f}, shift={shift:.4f}', 'cyan')
+                
+                # Store aligned depth
                 all_depths.append(depth.copy())
                 
-                # Generate point cloud from depth and intrinsics
+                # Generate point cloud from aligned depth and intrinsics
                 point_cloud = depth_to_pointcloud(depth, intrinsics, rgb_image)
                 
                 # Sample to exactly num_points
