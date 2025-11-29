@@ -1,11 +1,11 @@
 defaults:
-  - task: adroit_hammer
+  - task: metaworld_coffee-button_dino
 
 name: train_dp3_dino
 
 task_name: ${task.name}
 shape_meta: ${task.shape_meta}
-exp_name: "dinov3"
+exp_name: "dinov2"
 
 horizon: 16
 n_obs_steps: 2
@@ -28,8 +28,8 @@ policy:
   - 1024
   - 2048
   crop_shape:
-  - 84
-  - 84
+  - 512
+  - 512
   horizon: ${horizon}
   kernel_size: 5
   n_action_steps: ${n_action_steps}
@@ -51,8 +51,8 @@ policy:
   obs_as_global_cond: true
   shape_meta: ${shape_meta}
 
-  # DINOv3 specific parameters
-  dino_model_name: "dinov3_vitl16"  # Options: dinov3_vits14, dinov3_vitb14, dinov3_vitl16, etc.
+  # DINOv2 specific parameters (loaded via HuggingFace)
+  dino_model_name: "dinov2_vits14"  # Options: dinov2_vits14, dinov2_vitb14, dinov2_vitl14, dinov2_vitg14
   freeze_backbone: true
   state_mlp_size: [64, 64]
 
@@ -66,17 +66,17 @@ ema:
   max_value: 0.9999
 
 dataloader:
-  batch_size: 128  # Reduced due to larger vision model
-  num_workers: 16
+  batch_size: 32  # Reduced due to DINOv2 memory usage (increase if GPU allows)
+  num_workers: 2
   shuffle: True
-  pin_memory: True
+  pin_memory: False
   persistent_workers: False
 
 val_dataloader:
-  batch_size: 128
-  num_workers: 16
+  batch_size: 32
+  num_workers: 2
   shuffle: False
-  pin_memory: True
+  pin_memory: False
   persistent_workers: False
 
 optimizer:
@@ -113,7 +113,7 @@ logging:
   resume: true
   tags:
   - dp3
-  - dinov3
+  - dinov2
 
 checkpoint:
   save_ckpt: False

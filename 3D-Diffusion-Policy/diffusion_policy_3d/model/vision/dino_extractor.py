@@ -1,3 +1,8 @@
+"""
+DINOv2 Vision Encoder for DP3
+Uses HuggingFace Transformers to load DINOv2 models.
+"""
+
 import torch
 import torch.nn as nn
 import torchvision.transforms as T
@@ -7,104 +12,171 @@ from typing import Dict
 # Reuse the create_mlp from pointnet_extractor
 from diffusion_policy_3d.model.vision.pointnet_extractor import create_mlp
 
-class DinoV3Encoder(nn.Module):
+# HuggingFace model name mapping
+HF_MODEL_MAP = {
+    # Short names -> HuggingFace names
+    'dinov2_vits14': 'facebook/dinov2-small',
+    'dinov2_vitb14': 'facebook/dinov2-base',
+    'dinov2_vitl14': 'facebook/dinov2-large',
+    'dinov2_vitg14': 'facebook/dinov2-giant',
+    # Also support direct HuggingFace names
+    'facebook/dinov2-small': 'facebook/dinov2-small',
+    'facebook/dinov2-base': 'facebook/dinov2-base',
+    'facebook/dinov2-large': 'facebook/dinov2-large',
+    'facebook/dinov2-giant': 'facebook/dinov2-giant',
+}
+
+# Embedding dimensions for each model
+EMBED_DIMS = {
+    'facebook/dinov2-small': 384,
+    'facebook/dinov2-base': 768,
+    'facebook/dinov2-large': 1024,
+    'facebook/dinov2-giant': 1536,
+}
+
+
+class DinoV2Encoder(nn.Module):
+    """
+    DINOv2 Vision Encoder using HuggingFace Transformers.
+    Extracts visual features from RGB images using pre-trained DINOv2 models.
+    """
+    
     def __init__(self, 
                  observation_space: Dict, 
-                 img_crop_shape=None, # Expecting [512, 512]
+                 img_crop_shape=None,
                  state_mlp_size=(64, 64), 
                  state_mlp_activation_fn=nn.ReLU,
-                 dino_model_name='dinov3_vitl16', # Note: 'dinov3' usually uses patch size 16
+                 dino_model_name='dinov2_vitl14',  # Default to DINOv2-Large
                  freeze_backbone=True,
                  **kwargs
                  ):
+        """
+        Initialize DINOv2 encoder.
+        
+        Args:
+            observation_space: Dict with observation shapes (must include 'image' and 'agent_pos')
+            img_crop_shape: Optional crop shape for images
+            state_mlp_size: Tuple of hidden layer sizes for state MLP
+            state_mlp_activation_fn: Activation function for state MLP
+            dino_model_name: Name of DINOv2 model to use
+            freeze_backbone: Whether to freeze DINOv2 weights
+        """
         super().__init__()
         
         self.image_key = 'image' 
         self.state_key = 'agent_pos'
         
-        cprint(f"[DinoV3Encoder] Loading {dino_model_name} from facebookresearch/dinov3...", "cyan")
+        # Map model name to HuggingFace name
+        hf_model_name = HF_MODEL_MAP.get(dino_model_name, dino_model_name)
+        cprint(f"[DinoV2Encoder] Loading {hf_model_name} from HuggingFace...", "cyan")
         
-        # Load DINOv3 from official Hub
-        # trust_repo=True is often required for new private/public repos with custom code
+        # Load from HuggingFace Transformers
         try:
-            self.backbone = torch.hub.load('facebookresearch/dinov3', dino_model_name, trust_repo=True)
+            from transformers import AutoModel
+            self.backbone = AutoModel.from_pretrained(hf_model_name)
+            cprint(f"[DinoV2Encoder] Successfully loaded {hf_model_name}!", "green")
         except Exception as e:
-            cprint(f"Standard Hub Load failed: {e}. Trying local fallback or Transformers...", "red")
-            # Fallback: You might need to install via transformers if Hub fails
-            # from transformers import AutoModel
-            # self.backbone = AutoModel.from_pretrained(f"facebook/{dino_model_name}")
+            cprint(f"[DinoV2Encoder] HuggingFace load failed: {e}", "red")
             raise e
 
-        # Determine embedding dimension (e.g., 1024 for ViT-L)
-        if hasattr(self.backbone, 'embed_dim'):
-            self.visual_feature_dim = self.backbone.embed_dim
+        # Get embedding dimension from model config or lookup table
+        if hasattr(self.backbone.config, 'hidden_size'):
+            self.visual_feature_dim = self.backbone.config.hidden_size
         else:
-            DIMS = {'dinov3_vits16': 384, 'dinov3_vitb16': 768, 'dinov3_vitl16': 1024}
-            self.visual_feature_dim = DIMS.get(dino_model_name, 1024)
+            self.visual_feature_dim = EMBED_DIMS.get(hf_model_name, 1024)
         
+        # Freeze backbone if specified
         if freeze_backbone:
             for param in self.backbone.parameters():
                 param.requires_grad = False
             self.backbone.eval()
+            cprint(f"[DinoV2Encoder] Backbone frozen (no gradient updates)", "cyan")
         
-        # ImageNet Normalization (Required for DINO)
-        self.normalize = T.Compose([
-            T.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
-        ])
+        # ImageNet Normalization (required for DINO models)
+        self.normalize = T.Normalize(
+            mean=[0.485, 0.456, 0.406], 
+            std=[0.229, 0.224, 0.225]
+        )
         
-        # State MLP
+        # State MLP (same as PointNet encoder)
         self.state_shape = observation_space[self.state_key]
         if len(state_mlp_size) == 0:
-            raise RuntimeError(f"State mlp size is empty")
+            raise RuntimeError("State MLP size is empty")
         elif len(state_mlp_size) == 1:
             net_arch = []
         else:
-            net_arch = state_mlp_size[:-1]
+            net_arch = list(state_mlp_size[:-1])
         state_output_dim = state_mlp_size[-1]
 
-        self.state_mlp = nn.Sequential(*create_mlp(self.state_shape[0], state_output_dim, net_arch, state_mlp_activation_fn))
+        self.state_mlp = nn.Sequential(
+            *create_mlp(self.state_shape[0], state_output_dim, net_arch, state_mlp_activation_fn)
+        )
 
+        # Total output dimension = visual features + state features
         self.n_output_channels = self.visual_feature_dim + state_output_dim
         
-        cprint(f"[DinoV3Encoder] Visual Dim: {self.visual_feature_dim} | State Dim: {state_output_dim}", "yellow")
+        cprint(f"[DinoV2Encoder] Visual Dim: {self.visual_feature_dim} | "
+               f"State Dim: {state_output_dim} | Total: {self.n_output_channels}", "yellow")
 
     def forward(self, observations: Dict) -> torch.Tensor:
-        # Input: [B, T, C, H, W] or [B, C, H, W]
+        """
+        Forward pass through the encoder.
+        
+        Args:
+            observations: Dict containing 'image' and 'agent_pos' keys
+                - image: (B, C, H, W) or (B, H, W, C) tensor
+                - agent_pos: (B, state_dim) tensor
+        
+        Returns:
+            Combined feature tensor of shape (B, n_output_channels)
+        """
+        # Get images from observations
         images = observations[self.image_key]
         
-        # Flatten Time Dimension
-        has_time_dim = len(images.shape) == 5
-        if has_time_dim:
-            B, T_steps, C, H, W = images.shape
-            images = images.view(B * T_steps, C, H, W)
+        # Ensure correct format: (B, C, H, W)
+        if len(images.shape) == 4 and images.shape[-1] == 3:
+            # (B, H, W, C) -> (B, C, H, W)
+            images = images.permute(0, 3, 1, 2)
         
-        # Ensure 0-1 range before normalization
+        # Ensure images are float and in [0, 1] range
+        images = images.float()
         if images.max() > 1.0:
             images = images / 255.0
-            
-        # DINOv3 Forward Pass
+        
+        # Apply ImageNet normalization
         processed_imgs = self.normalize(images)
         
-        # DINOv3 often returns a dictionary or specific tensor. 
-        # Using forward_features() is safer to get the CLS token or patch embeddings.
-        # We usually want the CLS token (global descriptor) for diffusion conditioning.
-        features_dict = self.backbone.forward_features(processed_imgs)
-        visual_feat = features_dict['x_norm_clstoken'] # [B*T, Embed_Dim]
-
-        # Process State
-        state = observations[self.state_key]
-        if has_time_dim:
-            state = state.view(B * T_steps, -1)
+        # DINOv2 Forward Pass
+        # Control gradient computation based on training mode and frozen state
+        with torch.set_grad_enabled(
+            self.training and any(p.requires_grad for p in self.backbone.parameters())
+        ):
+            outputs = self.backbone(processed_imgs)
             
-        state_feat = self.state_mlp(state)
+            # Get CLS token (first token of last_hidden_state)
+            # HuggingFace DINOv2 returns last_hidden_state of shape (B, num_patches+1, hidden_size)
+            # The first token [0] is the CLS token
+            if hasattr(outputs, 'last_hidden_state'):
+                visual_feat = outputs.last_hidden_state[:, 0]  # CLS token: (B, hidden_size)
+            elif hasattr(outputs, 'pooler_output'):
+                visual_feat = outputs.pooler_output
+            else:
+                # Fallback: use first token from tuple output
+                visual_feat = outputs[0][:, 0]
+
+        # Process robot state through MLP
+        state = observations[self.state_key]
+        state_feat = self.state_mlp(state)  # (B, state_output_dim)
         
-        # Concatenate
+        # Concatenate visual and state features
         final_feat = torch.cat([visual_feat, state_feat], dim=-1)
-        
-        if has_time_dim:
-            final_feat = final_feat.view(B, T_steps, -1)
             
         return final_feat
 
     def output_shape(self):
+        """Return the total output feature dimension."""
         return self.n_output_channels
+
+
+# Alias for backward compatibility
+DinoV3Encoder = DinoV2Encoder

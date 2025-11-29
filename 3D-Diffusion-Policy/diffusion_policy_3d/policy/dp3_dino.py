@@ -1,6 +1,7 @@
 """
-DP3 Policy with DINOv3 Vision Encoder
+DP3 Policy with DINOv2 Vision Encoder
 Uses RGB images instead of point clouds for observation encoding.
+Loads DINOv2 models via HuggingFace Transformers (Python 3.8+ compatible).
 """
 
 from typing import Dict
@@ -18,13 +19,14 @@ from diffusion_policy_3d.model.diffusion.conditional_unet1d import ConditionalUn
 from diffusion_policy_3d.model.diffusion.mask_generator import LowdimMaskGenerator
 from diffusion_policy_3d.common.pytorch_util import dict_apply
 from diffusion_policy_3d.common.model_util import print_params
-from diffusion_policy_3d.model.vision.dino_extractor import DinoV3Encoder
+from diffusion_policy_3d.model.vision.dino_extractor import DinoV2Encoder
 
 
 class DP3Dino(BasePolicy):
     """
-    DP3 Policy using DINOv3 for visual encoding.
+    DP3 Policy using DINOv2 for visual encoding.
     Uses RGB images instead of point clouds.
+    DINOv2 is loaded via HuggingFace Transformers for Python 3.8 compatibility.
     """
     
     def __init__(self, 
@@ -44,8 +46,8 @@ class DP3Dino(BasePolicy):
             use_mid_condition=True,
             use_up_condition=True,
             crop_shape=None,
-            # DINOv3 specific parameters
-            dino_model_name='dinov3_vitl16',
+            # DINOv2 specific parameters
+            dino_model_name='dinov2_vitl14',
             freeze_backbone=True,
             state_mlp_size=(64, 64),
             # parameters passed to step
@@ -67,9 +69,9 @@ class DP3Dino(BasePolicy):
         obs_shape_meta = shape_meta['obs']
         obs_dict = dict_apply(obs_shape_meta, lambda x: x['shape'])
 
-        # Initialize DINOv3 encoder
-        cprint("[DP3Dino] Initializing DinoV3 Encoder...", "green")
-        obs_encoder = DinoV3Encoder(
+        # Initialize DINOv2 encoder
+        cprint("[DP3Dino] Initializing DinoV2 Encoder...", "green")
+        obs_encoder = DinoV2Encoder(
             observation_space=obs_dict,
             img_crop_shape=crop_shape,
             state_mlp_size=state_mlp_size,
@@ -332,3 +334,4 @@ class DP3Dino(BasePolicy):
         }
         
         return loss, loss_dict
+
