@@ -83,15 +83,17 @@ def depth_to_pointcloud(depth, intrinsics, rgb_image=None):
     
     if rgb_image is not None:
         # Create RGBD image
+        # depth_scale=1.0 because Depth Anything outputs depth in meters (not millimeters)
         o3d_color = o3d.geometry.Image(rgb_image.astype(np.uint8))
         rgbd_image = o3d.geometry.RGBDImage.create_from_color_and_depth(
-            o3d_color, o3d_depth, depth_trunc=1000.0, convert_rgb_to_intensity=False
+            o3d_color, o3d_depth, depth_scale=1.0, depth_trunc=1000.0, convert_rgb_to_intensity=False
         )
         # Generate point cloud with colors
         pcd = o3d.geometry.PointCloud.create_from_rgbd_image(rgbd_image, o3d_intrinsics)
     else:
         # Generate point cloud without colors
-        pcd = o3d.geometry.PointCloud.create_from_depth_image(o3d_depth, o3d_intrinsics)
+        # depth_scale=1.0 because Depth Anything outputs depth in meters (not millimeters)
+        pcd = o3d.geometry.PointCloud.create_from_depth_image(o3d_depth, o3d_intrinsics, depth_scale=1.0)
     
     # Convert to numpy array
     points = np.asarray(pcd.points)  # (N, 3)
@@ -176,23 +178,35 @@ def process_zarr_file(zarr_path, device='cuda', batch_size=10, num_points=4096):
                 imageio.imwrite(img_path, img)
                 image_paths.append(img_path)
             
-            # Run depth inference
+            # Run depth inference with MuJoCo intrinsics
             with torch.no_grad():
-                prediction = model.inference(image_paths)
+                # Get MuJoCo intrinsics for this batch
+                batch_intrinsics_mujoco = np.stack([camera_intrinsics_array[idx] for idx in batch_indices], axis=0)  # (batch_size, 3, 3)
+                
+                # Pass MuJoCo intrinsics to Depth Anything
+                prediction = model.inference(image_paths, intrinsics=batch_intrinsics_mujoco)
             
             # prediction.depth: [N, H, W] float32
-            # prediction.intrinsics: [N, 3, 3] float32 (predicted intrinsics, but we'll use the stored ones)
             batch_depths = np.asarray(prediction.depth)  # (batch_size, H, W)
+            
+            cprint(f'Batch depths shape: {batch_depths.shape}', 'cyan')
+            if batch_start == 0:
+                cprint(f'Using MuJoCo intrinsics:\n{batch_intrinsics_mujoco[0]}', 'cyan')
             
             # Generate point clouds for each image in batch
             for i, idx in enumerate(batch_indices):
                 depth = batch_depths[i]  # (H, W) - might be 504x504
+                # Use the same MuJoCo intrinsics for point cloud generation
                 intrinsics = camera_intrinsics_array[idx]  # (3, 3)
                 rgb_image = img_array[idx]  # (H, W, 3) - 512x512
                 
                 # Resize depth to match RGB image size if they don't match
+                depth_h, depth_w = depth.shape
+                rgb_h, rgb_w = rgb_image.shape[:2]
                 if depth.shape != rgb_image.shape[:2]:
-                    depth = cv2.resize(depth, (rgb_image.shape[1], rgb_image.shape[0]), interpolation=cv2.INTER_LINEAR)
+                    depth = cv2.resize(depth, (rgb_w, rgb_h), interpolation=cv2.INTER_LINEAR)
+                    # No need to adjust intrinsics since we're using the stored MuJoCo intrinsics
+                    # which are already for the 512x512 resolution
                 
                 # Store resized depth
                 all_depths.append(depth.copy())
