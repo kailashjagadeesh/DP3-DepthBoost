@@ -43,6 +43,9 @@ def main(args):
 
 	e = MetaWorldEnv(env_name, device="cuda:0", use_point_crop=True, num_points=args.num_points, image_size=args.image_size)
 	
+	# Get camera intrinsics (constant for all frames)
+	camera_intrinsics = e.pc_generator.cam_mats[0]  # 3x3 matrix
+	
 	num_episodes = args.num_episodes
 	cprint(f"Number of episodes : {num_episodes}", "yellow")
 	
@@ -54,6 +57,7 @@ def main(args):
 	state_arrays = []
 	full_state_arrays = []
 	action_arrays = []
+	camera_intrinsics_arrays = []
 	episode_ends_arrays = []
     
 	
@@ -82,6 +86,7 @@ def main(args):
 		state_arrays_sub = []
 		full_state_arrays_sub = []
 		action_arrays_sub = []
+		camera_intrinsics_arrays_sub = []
 		total_count_sub = 0
   
 		while not done:
@@ -99,6 +104,7 @@ def main(args):
 			depth_arrays_sub.append(obs_depth)
 			state_arrays_sub.append(obs_robot_state)
 			full_state_arrays_sub.append(raw_state)
+			camera_intrinsics_arrays_sub.append(camera_intrinsics.copy())
 			
 			action = mw_policy.get_action(raw_state)
 		
@@ -127,6 +133,7 @@ def main(args):
 			state_arrays.extend(copy.deepcopy(state_arrays_sub))
 			action_arrays.extend(copy.deepcopy(action_arrays_sub))
 			full_state_arrays.extend(copy.deepcopy(full_state_arrays_sub))
+			camera_intrinsics_arrays.extend(copy.deepcopy(camera_intrinsics_arrays_sub))
 			cprint('Episode: {}, Reward: {}, Success Times: {}'.format(episode_idx, ep_reward, ep_success_times), 'green')
 			episode_idx += 1
 	
@@ -148,6 +155,7 @@ def main(args):
 	point_cloud_arrays = np.stack(point_cloud_arrays, axis=0)
 	depth_arrays = np.stack(depth_arrays, axis=0)
 	action_arrays = np.stack(action_arrays, axis=0)
+	camera_intrinsics_arrays = np.stack(camera_intrinsics_arrays, axis=0)
 	episode_ends_arrays = np.array(episode_ends_arrays)
 
 	compressor = zarr.Blosc(cname='zstd', clevel=3, shuffle=1)
@@ -157,12 +165,14 @@ def main(args):
 	point_cloud_chunk_size = (100, point_cloud_arrays.shape[1], point_cloud_arrays.shape[2])
 	depth_chunk_size = (100, depth_arrays.shape[1], depth_arrays.shape[2])
 	action_chunk_size = (100, action_arrays.shape[1])
+	camera_intrinsics_chunk_size = (100, 3, 3)
 	zarr_data.create_dataset('img', data=img_arrays, chunks=img_chunk_size, dtype='uint8', overwrite=True, compressor=compressor)
 	zarr_data.create_dataset('state', data=state_arrays, chunks=state_chunk_size, dtype='float32', overwrite=True, compressor=compressor)
 	zarr_data.create_dataset('full_state', data=full_state_arrays, chunks=full_state_chunk_size, dtype='float32', overwrite=True, compressor=compressor)
 	zarr_data.create_dataset('point_cloud', data=point_cloud_arrays, chunks=point_cloud_chunk_size, dtype='float32', overwrite=True, compressor=compressor)
 	zarr_data.create_dataset('depth', data=depth_arrays, chunks=depth_chunk_size, dtype='float32', overwrite=True, compressor=compressor)
 	zarr_data.create_dataset('action', data=action_arrays, chunks=action_chunk_size, dtype='float32', overwrite=True, compressor=compressor)
+	zarr_data.create_dataset('camera_intrinsics', data=camera_intrinsics_arrays, chunks=camera_intrinsics_chunk_size, dtype='float32', overwrite=True, compressor=compressor)
 	zarr_meta.create_dataset('episode_ends', data=episode_ends_arrays, dtype='int64', overwrite=True, compressor=compressor)
 
 	cprint(f'-'*50, 'cyan')
@@ -173,10 +183,11 @@ def main(args):
 	cprint(f'state shape: {state_arrays.shape}, range: [{np.min(state_arrays)}, {np.max(state_arrays)}]', 'green')
 	cprint(f'full_state shape: {full_state_arrays.shape}, range: [{np.min(full_state_arrays)}, {np.max(full_state_arrays)}]', 'green')
 	cprint(f'action shape: {action_arrays.shape}, range: [{np.min(action_arrays)}, {np.max(action_arrays)}]', 'green')
+	cprint(f'camera_intrinsics shape: {camera_intrinsics_arrays.shape}', 'green')
 	cprint(f'Saved zarr file to {save_dir}', 'green')
 
 	# clean up
-	del img_arrays, state_arrays, point_cloud_arrays, action_arrays, episode_ends_arrays
+	del img_arrays, state_arrays, point_cloud_arrays, action_arrays, camera_intrinsics_arrays, episode_ends_arrays
 	del zarr_root, zarr_data, zarr_meta
 	del e
 
