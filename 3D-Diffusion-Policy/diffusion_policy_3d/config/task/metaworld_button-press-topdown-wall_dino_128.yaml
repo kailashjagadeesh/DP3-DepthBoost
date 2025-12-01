@@ -34,7 +34,7 @@ env_runner:
 # Use the new DINOv2-compatible dataset
 dataset:
   _target_: diffusion_policy_3d.dataset.metaworld_dataset_dino.MetaworldDatasetDino
-  zarr_path: data/metaworld_button-press-topdown-wall_expert.zarr
+  zarr_path: data/metaworld_button-press-topdown-wall_expert_dino_128.zarr
   horizon: ${horizon}
   pad_before: ${eval:'${n_obs_steps}-1'}
   pad_after: ${eval:'${n_action_steps}-1'}
