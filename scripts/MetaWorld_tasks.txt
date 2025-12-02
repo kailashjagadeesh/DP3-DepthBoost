@@ -1,0 +1,58 @@
+# MetaWorld - All 50 Tasks
+# Use with: bash scripts/gen_demonstration_metaworld.sh <task_name>
+# Example: bash scripts/gen_demonstration_metaworld.sh pick-place
+
+# ============ MT10 Tasks (10 core tasks) ============
+reach
+push
+pick-place
+door-open
+drawer-open
+drawer-close
+button-press-topdown
+peg-insert-side
+window-open
+window-close
+
+# ============ Additional Tasks (40 more) ============
+assembly
+basketball
+bin-picking
+box-close
+button-press
+button-press-topdown-wall
+button-press-wall
+coffee-button
+coffee-pull
+coffee-push
+dial-turn
+disassemble
+door-close
+door-lock
+door-unlock
+faucet-close
+faucet-open
+hammer
+hand-insert
+handle-press
+handle-press-side
+handle-pull
+handle-pull-side
+lever-pull
+peg-unplug-side
+pick-out-of-hole
+pick-place-wall
+plate-slide
+plate-slide-back
+plate-slide-back-side
+plate-slide-side
+push-back
+push-wall
+reach-wall
+shelf-place
+soccer
+stick-pull
+stick-push
+sweep
+sweep-into
+

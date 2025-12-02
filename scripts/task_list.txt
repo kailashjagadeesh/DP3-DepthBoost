@@ -1,0 +1,10 @@
+# MetaWorld task list for demonstration generation
+# One task name per line
+# Lines starting with # are comments
+
+basketball
+pick-place
+pick-place-wall
+push
+reach
+
