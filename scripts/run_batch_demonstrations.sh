@@ -1,69 +1,72 @@
 #!/bin/bash
-# Run gen_demonstration_metaworld.sh for a list of task configurations
-#
-# Usage:
-#   bash scripts/run_batch_demonstrations.sh scripts/task_list.txt
-#
-# The task list file should contain one task name per line, e.g.:
-#   basketball
-#   pick-place
-#   pick-place-wall
-#   push
-#   reach
+# Run gen_demonstration_metaworld.sh for a list of task configurations in parallel
 
-# Check if task list file is provided
 if [ -z "$1" ]; then
     echo "Usage: bash scripts/run_batch_demonstrations.sh <task_list_file>"
-    echo "Example: bash scripts/run_batch_demonstrations.sh scripts/task_list.txt"
     exit 1
 fi
 
 TASK_LIST_FILE=$1
 
-# Check if task list file exists
 if [ ! -f "$TASK_LIST_FILE" ]; then
     echo "Error: Task list file '$TASK_LIST_FILE' not found!"
     exit 1
 fi
 
+MAX_JOBS=5  # <--- change this to control parallelism
+
 echo "=========================================="
-echo "Running batch demonstrations"
+echo "Running batch demonstrations in parallel (max $MAX_JOBS jobs)"
 echo "Task list file: $TASK_LIST_FILE"
 echo "=========================================="
 
-# Count total tasks
 TOTAL_TASKS=$(grep -v '^#' "$TASK_LIST_FILE" | grep -v '^$' | wc -l)
 CURRENT_TASK=0
 
-# Read task list file line by line
+run_task() {
+    local idx="$1"
+    local name="$2"
+
+    echo ""
+    echo "=========================================="
+    echo "[$idx/$TOTAL_TASKS] Running task: $name"
+    echo "=========================================="
+
+    bash scripts/gen_demonstration_metaworld.sh "$name"
+    local exit_code=$?
+
+    if [ $exit_code -eq 0 ]; then
+        echo "[$idx/$TOTAL_TASKS] Task '$name' completed successfully!"
+    else
+        echo "[$idx/$TOTAL_TASKS] Task '$name' failed with exit code $exit_code"
+    fi
+}
+
+# Export function if you ever use GNU parallel/xargs, but not needed for pure bash loop:
+# export -f run_task
+
 while IFS= read -r task_name || [ -n "$task_name" ]; do
     # Skip empty lines and comments
     if [ -z "$task_name" ] || [[ "$task_name" == \#* ]]; then
         continue
     fi
-    
+
     CURRENT_TASK=$((CURRENT_TASK + 1))
-    
-    echo ""
-    echo "=========================================="
-    echo "[$CURRENT_TASK/$TOTAL_TASKS] Running task: $task_name"
-    echo "=========================================="
-    
-    # Run the demonstration generation script
-    bash scripts/gen_demonstration_metaworld.sh "$task_name"
-    
-    # Check if the script succeeded
-    if [ $? -eq 0 ]; then
-        echo "[$CURRENT_TASK/$TOTAL_TASKS] Task '$task_name' completed successfully!"
-    else
-        echo "[$CURRENT_TASK/$TOTAL_TASKS] Task '$task_name' failed with exit code $?"
-    fi
-    
+
+    # Start the task in the background
+    run_task "$CURRENT_TASK" "$task_name" &
+
+    # If we already have MAX_JOBS running, wait for at least one to finish
+    while [ "$(jobs -rp | wc -l)" -ge "$MAX_JOBS" ]; do
+        wait -n  # wait for any one job to complete (Bash 4.3+)
+    done
 done < "$TASK_LIST_FILE"
+
+# Wait for all remaining jobs to finish
+wait
 
 echo ""
 echo "=========================================="
 echo "Batch demonstration generation complete!"
 echo "Processed $CURRENT_TASK tasks"
 echo "=========================================="
-
