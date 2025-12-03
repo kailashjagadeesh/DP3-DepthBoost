@@ -66,18 +66,18 @@ ema:
   max_value: 0.9999
 
 dataloader:
-  batch_size: 32  # Reduced due to DINOv2 memory usage (increase if GPU allows)
-  num_workers: 2
+  batch_size: 64  # Reduced due to DINOv2 memory usage (increase if GPU allows)
+  num_workers: 1
   shuffle: True
-  pin_memory: False
-  persistent_workers: False
+  pin_memory: True
+  persistent_workers: True
 
 val_dataloader:
-  batch_size: 32
-  num_workers: 2
+  batch_size: 64
+  num_workers: 1
   shuffle: False
-  pin_memory: False
-  persistent_workers: False
+  pin_memory: True
+  persistent_workers: True
 
 optimizer:
   _target_: torch.optim.AdamW
@@ -98,7 +98,7 @@ training:
   use_ema: True
   rollout_every: 200
   checkpoint_every: 200
-  val_every: 1
+  val_every: 10
   sample_every: 5
   max_train_steps: null
   max_val_steps: null

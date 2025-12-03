@@ -10,5 +10,5 @@ export CUDA_VISIBLE_DEVICES=0
 python gen_demonstration_expert.py --env_name=${task_name} \
             --num_episodes 10 \
             --root_dir "../../3D-Diffusion-Policy/data/" \
-            --num_points 4096 \
-            --image_size 512
+            --num_points 1024 \
+            --image_size 128
