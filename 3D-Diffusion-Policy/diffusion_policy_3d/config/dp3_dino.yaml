@@ -108,7 +108,7 @@ logging:
   group: ${exp_name}
   id: null
   mode: online
-  name: ${training.seed}
+  name: ${exp_name}
   project: dp3_dino
   resume: true
   tags:
