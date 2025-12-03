@@ -1,0 +1,10 @@
+# MetaWorld task list for demonstration generation
+# One task name per line
+# Lines starting with # are comments
+
+plate-slide-side
+reach-wall
+plate-slide-back-side
+button-press-wall
+pick-place-wall
+

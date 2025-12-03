@@ -3,7 +3,7 @@ defaults:
 
 name: train_dp3
 
-task_name: ${task.name}
+task_name: ${task.task_name}
 shape_meta: ${task.shape_meta}
 exp_name: "debug"
 
@@ -31,8 +31,8 @@ policy:
   - 1024
   - 2048
   crop_shape:
-  - 80
-  - 80
+  - 128 #crop shape for the image
+  - 128
   encoder_output_dim: 64
   horizon: ${horizon}
   kernel_size: 5
@@ -109,7 +109,7 @@ training:
   use_ema: True
   rollout_every: 200
   checkpoint_every: 200
-  val_every: 1
+  val_every: 20
   sample_every: 5
   max_train_steps: null
   max_val_steps: null
@@ -119,7 +119,7 @@ logging:
   group: ${exp_name}
   id: null
   mode: online
-  name: ${training.seed}
+  name: ${exp_name}
   project: dp3
   resume: true
   tags:
